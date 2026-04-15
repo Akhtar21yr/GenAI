@@ -3,9 +3,7 @@ from langgraph_backend import chatbot
 from streamlit_chat import message
 from langchain.messages import HumanMessage
 import uuid
-
-
-
+from langgraph_backend import get_all_threads
 
 
 def genrate_thread_id():
@@ -39,7 +37,7 @@ if 'thread_id' not in st.session_state:
     st.session_state['thread_id'] = str(genrate_thread_id())
 
 if 'chat_threads' not in st.session_state:
-    st.session_state['chat_threads'] = []
+    st.session_state['chat_threads'] = get_all_threads()
 
 st.sidebar.title('LangGraph Chatbot')
 if st.sidebar.button('New chat'):

@@ -5,8 +5,10 @@ from pydantic import BaseModel
 from typing import Annotated
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 import os
+import sqlite3
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +24,11 @@ llm = ChatGoogleGenerativeAI(
 # -------------------------
 class ChatState(BaseModel):
     messages: Annotated[list[BaseMessage], add_messages]
+
+
+def run_cmd(cmd):
+    pass
+    
 
 
 # -------------------------
@@ -44,7 +51,10 @@ def chat_node(state: ChatState):
 # -------------------------
 # Graph Setup
 # -------------------------
-checkpointer = MemorySaver()
+BASEDIR = Path(__file__).parent
+
+conn = sqlite3.connect(database=BASEDIR /'chatbot.db',check_same_thread=False)
+checkpointer = SqliteSaver(conn=conn)
 graph = StateGraph(ChatState)
 
 graph.add_node("chat_node", chat_node)
@@ -54,17 +64,36 @@ graph.add_edge("chat_node", END)
 
 chatbot = graph.compile(checkpointer=checkpointer)
 
+# res = chatbot.invoke({'messages':['hello how r u']},config = {'configurable': {'thread_id': 'thread_id'}})
+# print(res)
 
-# thread_id = 1
-# while True:
-#     user_query = input('enter u r query')
-#     if user_query.strip() in ['bye','exit','quit']:
-#         break
-#     intial_state = {
-#         'messages':[
-#         HumanMessage(content=user_query)
-#         ]}
-#     config = {'configurable':{'thread_id':thread_id}}
-#     res = workflow.invoke(intial_state,config=config)
-#     print(res['messages'][-1].content)
+def get_all_threads():
+    threads = set()
+    result = []
 
+    for checkpoint in checkpointer.list(None):
+        thread_id = checkpoint.config['configurable']['thread_id']
+        threads.add(thread_id)
+
+    for thread_id in threads:
+        state = chatbot.get_state(
+            config={'configurable': {'thread_id': thread_id}}
+        )
+
+        messages = state.values.get('messages', [])
+
+        topic = "New Chat"
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                topic = msg.content[:30]
+                break
+
+        result.append({
+            "thread_id": thread_id,
+            "topic": topic
+        })
+
+    return result
+
+
+# get_all_threads
